@@ -60,25 +60,89 @@ module Sensu::Dashboard
         $dashboard_settings = settings[:dashboard] || Hash.new
         $dashboard_settings[:port] ||= 8080
         $dashboard_settings[:poll_frequency] ||= 10
-        $api_settings = settings[:api] || Hash.new
-        $api_settings[:host] ||= 'localhost'
-        $api_settings[:port] ||= 4567
-        unless $dashboard_settings[:port].is_a?(Integer)
-          invalid_settings('dashboard port must be an integer', {
-            :settings => $dashboard_settings
-          })
+        $backend_settings = settings[:backends] || Hash.new
+        unless $backend_settings.empty?
+          unless $backend_settings.is_a?(Hash)
+            invalid_settings('backend settings must be a hash')
+          end
+
+          # initialize the global backend
+          $backend_settings[:global_name] ||= 'global_backend'
+          $backends = Hash.new
+          $backends[$backend_settings[:global_name]] = {
+            :name => $backend_settings[:global_name],
+            :config => {
+              :api => settings[:api] || Hash.new
+            }
+          }
+          global_backend = $backends[$backend_settings[:global_name]]
+          global_backend[:config][:api][:host] ||= 'localhost'
+          global_backend[:config][:api][:port] ||= 4567
+          unless $backend_settings[:other_backends].is_a?(Array)
+            invalid_settings('other_backends must be an array', {
+              :settings => $backend_settings
+            })
+          end
+
+          $backend_settings[:other_backends].each do |other_backend|
+            _validate_other_backend(other_backend)
+            $backends[name] = other_backend
+          end
+          $backends.each do |name, backend|
+            api_settings = backend[:config][:api]
+            backend[:api_url] = 'http://' + api_settings[:host] + ':' + api_settings[:port].to_s
+            backend[:api_options] = {:head => {'Accept' => 'application/json'}}
+            if api_settings[:user] && api_settings[:password]
+              backend[:api_options].merge!(:head => {:authorization => [api_settings[:user], api_settings[:password]]})
+            end
+          end
         end
+
         unless $dashboard_settings[:poll_frequency].is_a?(Integer)
           invalid_settings('dashboard poll frequency must be an integer', {
             :settings => $dashboard_settings
           })
         end
-        base.setup_process
-        $api_url = 'http://' + $api_settings[:host] + ':' + $api_settings[:port].to_s
-        $api_options = {:head => {'Accept' => 'application/json'}}
-        if $api_settings[:user] && $api_settings[:password]
-          $api_options.merge!(:head => {:authorization => [$api_settings[:user], $api_settings[:password]]})
+        _select_backend(global_backend)
+      end
+
+      def _validate_other_backend(other_backend)
+        unless other_backend.is_a?(Hash)
+          invalid_settings('other_backend must be a hash')
         end
+        name = other_backend[:name]
+        unless name.nil? || name.strip.empty?
+          invalid_settings('other_backend must have a non-empty name.', {
+            :settings => other_backend
+          })
+        end
+        if $backends.has_key?(name)
+          invalid_settings('other_backend names must be unique.', {
+            :existing_backend => $backends[name],
+            :duplicate_backend => other_backend
+          })
+        end
+        unless other_backend[:config] && other_backend[:config][:api]
+          invalid_settings('other_backends must define an api', {
+            :settings => other_backend
+          })
+        end
+        unless other_backend[:config][:api][:host]
+          invalid_settings('other_backend must define an api host', {
+            :settings => other_backend
+          })
+        end
+        unless other_backend[:config][:api][:port].is_a?(Integer)
+          invalid_settings('other_backend must define an integer api port', {
+            :settings => other_backend
+          })
+        end
+      end
+
+      def _select_backend(backend)
+        $selected_backend = backend
+        $api_url = backend[:api_url]
+        $api_options = backend[:api_options]
       end
 
       def start
