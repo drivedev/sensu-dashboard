@@ -27,7 +27,7 @@ html(lang='en')
             img(src='img/logo.png' alt='')
             span Sensu Dashboard
           ul.nav.pull-right#navigation
-            - if $backends.length > 0
+            - if $backends.length > 1
               li#nav_backends
                 | Backends:&nbsp
                 select#backends

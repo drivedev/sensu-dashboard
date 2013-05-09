@@ -60,51 +60,53 @@ module Sensu::Dashboard
         $dashboard_settings = settings[:dashboard] || Hash.new
         $dashboard_settings[:port] ||= 8080
         $dashboard_settings[:poll_frequency] ||= 10
+
         $backend_settings = settings[:backends] || Hash.new
-        unless $backend_settings.empty?
-          unless $backend_settings.is_a?(Hash)
-            invalid_settings('backend settings must be a hash')
-          end
+        unless $backend_settings.is_a?(Hash)
+          invalid_settings('backend settings must be a hash')
+        end
 
-          # initialize the global backend
-          $backend_settings[:global_name] ||= 'global_backend'
-          $backends = Hash.new
-          $backends[$backend_settings[:global_name]] = {
-            :name => $backend_settings[:global_name],
-            :config => {
-              :api => settings[:api] || Hash.new
-            }
+        # initialize the global backend
+        $backend_settings[:global_name] ||= 'global_backend'
+        $backends = Hash.new
+        $backends[$backend_settings[:global_name]] = {
+          :name => $backend_settings[:global_name],
+          :config => {
+            :api => settings[:api] || Hash.new
           }
-          global_backend = $backends[$backend_settings[:global_name]]
-          global_backend[:config][:api][:host] ||= 'localhost'
-          global_backend[:config][:api][:port] ||= 4567
-          unless $backend_settings[:other_backends].is_a?(Array)
-            invalid_settings('other_backends must be an array', {
-              :settings => $backend_settings
-            })
-          end
+        }
+        global_backend = $backends[$backend_settings[:global_name]]
+        global_backend[:config][:api][:host] ||= 'localhost'
+        global_backend[:config][:api][:port] ||= 4567
 
-          $backend_settings[:other_backends].each do |other_backend|
-            _validate_other_backend(other_backend)
-            $backends[other_backend[:name]] = other_backend
-          end
-          $backends.each do |name, backend|
-            api_settings = backend[:config][:api]
-            backend[:api_url] = 'http://' + api_settings[:host] + ':' + api_settings[:port].to_s
-            backend[:api_options] = {:head => {'Accept' => 'application/json'}}
-            if api_settings[:user] && api_settings[:password]
-              backend[:api_options].merge!(:head => {:authorization => [api_settings[:user], api_settings[:password]]})
-            end
+        $backend_settings[:other_backends] ||= Array.new
+        unless $backend_settings[:other_backends].is_a?(Array)
+          invalid_settings('other_backends must be an array', {
+            :settings => $backend_settings
+          })
+        end
+
+        $backend_settings[:other_backends].each do |other_backend|
+          _validate_other_backend(other_backend)
+          $backends[other_backend[:name]] = other_backend
+        end
+
+        $backends.each do |name, backend|
+          api_settings = backend[:config][:api]
+          backend[:api_url] = 'http://' + api_settings[:host] + ':' + api_settings[:port].to_s
+          backend[:api_options] = {:head => {'Accept' => 'application/json'}}
+          if api_settings[:user] && api_settings[:password]
+            backend[:api_options].merge!(:head => {:authorization => [api_settings[:user], api_settings[:password]]})
           end
         end
+
+        _select_backend(global_backend)
 
         unless $dashboard_settings[:poll_frequency].is_a?(Integer)
           invalid_settings('dashboard poll frequency must be an integer', {
             :settings => $dashboard_settings
           })
         end
-        $logger.info($backends)
-        _select_backend(global_backend)
       end
 
       def _validate_other_backend(other_backend)
@@ -210,7 +212,7 @@ module Sensu::Dashboard
       content_type 'text/html'
       request_log_line
       protected!
-      if params['backend_name']
+      if $backends.length > 1 && params['backend_name']
         Server._select_backend($backends[params['backend_name']])
       end
     end
