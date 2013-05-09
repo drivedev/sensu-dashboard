@@ -5,6 +5,8 @@ namespace "SensuDashboard.Collections", (exports) ->
 
     intervalSeconds: 10
 
+    _timeoutId: -1
+
     startLongPolling: (intervalSeconds) =>
       @longPolling = true
       @intervalSeconds = intervalSeconds if intervalSeconds
@@ -17,6 +19,10 @@ namespace "SensuDashboard.Collections", (exports) ->
       @fetch
         success: =>
           @onFetch()
+        reset: true
+        data:
+          backend_name: $('#backends').val()
 
     onFetch: =>
-      setTimeout(@executeLongPolling, 1000 * @intervalSeconds) if @longPolling
+      clearTimeout(@timeoutId) if @longPolling
+      @timeoutId = setTimeout(@executeLongPolling, 1000 * @intervalSeconds) if @longPolling

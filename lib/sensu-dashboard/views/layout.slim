@@ -30,7 +30,7 @@ html(lang='en')
             - if $backends.length > 0
               li#nav_backends
                 | Backends:&nbsp
-                select
+                select#backends
                   options
                   - $backends.each do |name, backend|
                     option = name

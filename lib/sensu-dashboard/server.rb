@@ -86,7 +86,7 @@ module Sensu::Dashboard
 
           $backend_settings[:other_backends].each do |other_backend|
             _validate_other_backend(other_backend)
-            $backends[name] = other_backend
+            $backends[other_backend[:name]] = other_backend
           end
           $backends.each do |name, backend|
             api_settings = backend[:config][:api]
@@ -103,6 +103,7 @@ module Sensu::Dashboard
             :settings => $dashboard_settings
           })
         end
+        $logger.info($backends)
         _select_backend(global_backend)
       end
 
@@ -111,7 +112,7 @@ module Sensu::Dashboard
           invalid_settings('other_backend must be a hash')
         end
         name = other_backend[:name]
-        unless name.nil? || name.strip.empty?
+        if name.nil? || name.strip.empty?
           invalid_settings('other_backend must have a non-empty name.', {
             :settings => other_backend
           })
@@ -209,6 +210,9 @@ module Sensu::Dashboard
       content_type 'text/html'
       request_log_line
       protected!
+      if params['backend_name']
+        Server._select_backend($backends[params['backend_name']])
+      end
     end
 
     aget '/', :provides => 'html' do
