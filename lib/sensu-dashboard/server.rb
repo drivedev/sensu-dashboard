@@ -213,7 +213,7 @@ module Sensu::Dashboard
       request_log_line
       protected!
       if $backends.length > 1 && params['backend_name']
-        if backend.nil?
+        if $backends[params['backend_name']].nil?
           $logger.error("no backend named: #{params['backend_name']}", {
             :error => error
           })
